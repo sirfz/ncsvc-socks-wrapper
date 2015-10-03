@@ -126,16 +126,17 @@ class RolesParser(HTMLParser):
 
 class juniper_vpn_wrapper(object):
 
-    def __init__(self, vpn_host, vpn_url, username, password, password2, oath, socks_port, host_checker):
-        self.vpn_host = vpn_host
-        self.vpn_url = vpn_url
-        self.username = username
+    def __init__(self, args, password, password2, oath):
+        self.vpn_host = args.host
+        self.vpn_url = args.url
+        self.username = args.user
         self.password = password
         self.password2 = password2
         self.oath = oath
         self.fixed_password = password is not None
-        self.socks_port = socks_port
-        self.host_checker = host_checker
+        self.socks_port = args.socks_port
+        self.host_checker = args.host_checker
+        self.role = args.role
         self.last_ncsvc = 0
         self.plugin_jar = '/usr/share/icedtea-web/plugin.jar'
 
@@ -330,15 +331,23 @@ class juniper_vpn_wrapper(object):
 
     def action_select_roles(self):
         links = list(self.br.links())
+        link = None
         if len(links) == 1:
             link = links[0]
-        else:
-            print 'Choose one of the following: '
+        elif self.role is not None:
+            try:
+                link = self.br.find_link(text=self.role)
+            except mechanize.LinkNotFoundError:
+                print 'Role {} not found!'.format(self.role)
+            else:
+                print 'Selected role {}'.format(self.role)
+        if link is None:
+            print 'Choose one of the following roles:'
             for i, link in enumerate(links):
                 print '{} - {}'.format(i, link.text)
             choice = int(raw_input('Choice: '))
             link = links[choice]
-        self.r = self.br.follow_link(text=link.text)
+        self.r = self.br.follow_link(link=link)
 
     def action_continue(self):
         # Yes, I want to terminate the existing connection
@@ -433,8 +442,7 @@ class juniper_vpn_wrapper(object):
                 os.remove(narport)
             else:
                 return
-        # self.tncc_socket, sock = socket.socketpair(
-        #     socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        # self.tncc_socket, sock = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         # null = open(os.devnull, 'w')
 
         self.tncc_process = subprocess.Popen(['java',
@@ -447,8 +455,7 @@ class juniper_vpn_wrapper(object):
                                               'Parameter0', '',
                                               'user_agent', self.user_agent,
                                               ])
-        # , env={'LD_PRELOAD': self.tncc_preload}, stdin=sock, stdout=null,
-        # time.sleep(3)
+        # , env={'LD_PRELOAD': self.tncc_preload}, stdin=sock)
 
         while not os.path.isfile(narport):
             time.sleep(0.5)
@@ -555,6 +562,8 @@ if __name__ == "__main__":
                         help='Config file for the script')
     parser.add_argument('-H', '--host-checker',
                         help='Use build in host checker')
+    parser.add_argument('-r', '--role', type=str,
+                        help='role name to select')
 
     args = parser.parse_args()
     password = None
@@ -585,6 +594,10 @@ if __name__ == "__main__":
         except:
             pass
         try:
+            args.role = config.get('vpn', 'role')
+        except:
+            pass
+        try:
             oath = config.get('vpn', 'oath')
         except:
             pass
@@ -603,7 +616,6 @@ if __name__ == "__main__":
         print "--user and --host are required parameters"
         sys.exit(1)
 
-    jvpn = juniper_vpn_wrapper(
-        args.host, args.url, args.user, password, password2, oath, args.socks_port, args.host_checker)
+    jvpn = juniper_vpn_wrapper(args, password, password2, oath)
     atexit.register(cleanup, jvpn)
     jvpn.run()
