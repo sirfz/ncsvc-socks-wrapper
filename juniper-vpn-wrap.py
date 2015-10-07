@@ -24,6 +24,7 @@ import tncc
 
 from urlparse import urlparse, parse_qs
 from HTMLParser import HTMLParser
+from bs4 import BeautifulSoup
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -144,6 +145,7 @@ class juniper_vpn_wrapper(object):
             raise Exception(self.plugin_jar + ' not found')
 
         self.br = mechanize.Browser()
+        # self.br.add_handler(PrettifyHandler())
 
         self.cj = cookielib.LWPCookieJar()
         self.br.set_cookiejar(self.cj)
@@ -351,8 +353,16 @@ class juniper_vpn_wrapper(object):
 
     def action_continue(self):
         # Yes, I want to terminate the existing connection
+        # properly parse broken html
+        soup = BeautifulSoup(self.r.get_data())
+        self.r.set_data(soup.prettify())
+        self.br.set_response(self.r)
         self.br.select_form(nr=0)
-        self.r = self.br.submit()
+        # select checkboxes
+        for control in self.br.form.controls:
+            if control.type == 'checkbox':
+                control.items[0].selected = True
+        self.r = self.br.submit(name='btnContinue')
 
     def action_ncsvc(self):
         dspreauth_cookie = self.find_cookie('DSPREAUTH')
