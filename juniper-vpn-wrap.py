@@ -13,7 +13,6 @@ import socket
 import ssl
 import errno
 import argparse
-import atexit
 import signal
 import ConfigParser
 import time
@@ -283,11 +282,12 @@ class juniper_vpn_wrapper(object):
         if self.password is None or self.last_action == 'login':
             for control in self.br.form.controls:
                 if control.name == 'password#2':
-                    if self.password2 is None:
-                        self.password2 = getpass.getpass('Password#2:')
-                    elif self.password2.startswith('script:'):
-                        self.password2 = get_script_output(self.password2[7:])
-                    self.br.form['password#2'] = self.password2
+                    password2 = self.password2
+                    if password2 is None:
+                        password2 = getpass.getpass('Password#2:')
+                    elif password2.startswith('script:'):
+                        password2 = get_script_output(password2[7:])
+                    self.br.form['password#2'] = password2
                     self.r = self.br.submit()
                     return
             if self.fixed_password:
@@ -553,8 +553,15 @@ class juniper_vpn_wrapper(object):
 
 
 def cleanup(jvpn):
-    # os.killpg(0, signal.SIGTERM)
-    jvpn.logout()
+    def _logout(*args, **kwargs):
+        # os.killpg(0, signal.SIGTERM)
+        try:
+            jvpn.logout()
+        except Exception as e:
+            print '{} error logging out: {}'.format(type(e).__name__, e)
+            sys.exit(1)
+        sys.exit(0)
+    return _logout
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(conflict_handler='resolve')
@@ -627,5 +634,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     jvpn = juniper_vpn_wrapper(args, password, password2, oath)
-    atexit.register(cleanup, jvpn)
+    signal.signal(signal.SIGINT, cleanup(jvpn))
     jvpn.run()
