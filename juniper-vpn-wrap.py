@@ -21,6 +21,7 @@ import hmac
 import hashlib
 import tncc
 
+from os.path import isfile
 from urlparse import urlparse, parse_qs
 from HTMLParser import HTMLParser
 from bs4 import BeautifulSoup
@@ -279,7 +280,8 @@ class juniper_vpn_wrapper(object):
         # on the user.
 
         self.br.select_form(nr=0)
-        if self.password is None or self.last_action == 'login':
+        password = self.password
+        if password is None or self.last_action == 'login':
             for control in self.br.form.controls:
                 if control.name == 'password#2':
                     password2 = self.password2
@@ -294,7 +296,7 @@ class juniper_vpn_wrapper(object):
                 print 'Login failed (Invalid username or password?)'
                 sys.exit(1)
             else:
-                self.password = getpass.getpass('Password:')
+                password = getpass.getpass('Password:')
                 self.needs_2factor = False
 
         if self.needs_2factor:
@@ -305,12 +307,12 @@ class juniper_vpn_wrapper(object):
         else:
             self.key = None
 
-        if self.password.startswith('script:'):
-            self.password = get_script_output(self.password[7:])
+        if password.startswith('script:'):
+            password = get_script_output(password[7:])
 
         # Enter username/password
         self.br.form['username'] = self.username
-        self.br.form['password'] = self.password
+        self.br.form['password'] = password
         # Untested, a list of availables realms is provided when this
         # is necessary.
         # self.br.form['realm'] = [realm]
@@ -500,13 +502,14 @@ class juniper_vpn_wrapper(object):
         # FIXME: This should really be form the webclient connection,
         # and the web client should verify the cert
 
-        s = socket.socket()
-        s.connect((self.vpn_host, 443))
-        ss = ssl.wrap_socket(s)
-        cert = ss.getpeercert(True)
         self.certfile = os.path.expanduser('~/.juniper_networks/{}.cert'.format(self.vpn_host))
-        with open(self.certfile, 'w') as f:
-            f.write(cert)
+        if not isfile(self.certfile):
+            s = socket.socket()
+            s.connect((self.vpn_host, 443))
+            ss = ssl.wrap_socket(s)
+            cert = ss.getpeercert(True)
+            with open(self.certfile, 'w') as f:
+                f.write(cert)
 
     def ncsvc_start(self):
         if self.ncsvc_bin is None:
