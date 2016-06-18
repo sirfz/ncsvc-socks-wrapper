@@ -125,6 +125,20 @@ class RolesParser(HTMLParser):
                 print '\t', data
 
 
+class PrettifyHandler(mechanize.BaseHandler):
+    def http_response(self, request, response):
+        if not hasattr(response, "seek"):
+            response = mechanize.response_seek_wrapper(response)
+        # only use BeautifulSoup if response is html
+        content_type = response.info().get('content-type')
+        if content_type and 'html' in content_type:
+            soup = BeautifulSoup(response.get_data())
+            response.set_data(soup.prettify().encode('UTF-8'))
+        return response
+
+    https_response = http_response
+
+
 class juniper_vpn_wrapper(object):
 
     def __init__(self, args, password, password2, oath):
@@ -145,7 +159,7 @@ class juniper_vpn_wrapper(object):
             raise Exception(self.plugin_jar + ' not found')
 
         self.br = mechanize.Browser()
-        # self.br.add_handler(PrettifyHandler())
+        self.br.add_handler(PrettifyHandler())
 
         self.cj = cookielib.LWPCookieJar()
         self.br.set_cookiejar(self.cj)
@@ -176,6 +190,7 @@ class juniper_vpn_wrapper(object):
 
         self.tncc_jar = None
         self.ncsvc_bin = None
+        self.last_login = None
 
     def find_cookie(self, name):
         for cookie in self.cj:
@@ -284,6 +299,11 @@ class juniper_vpn_wrapper(object):
         if password is None or self.last_action == 'login':
             for control in self.br.form.controls:
                 if control.name == 'password#2':
+                    if self.last_login:
+                        wait_ = time.time() - self.last_login
+                        if wait_ <= 60:
+                            print 'Waiting {} seconds before attempting password2 login'.format(wait_ + 1)
+                            time.sleep(wait_ + 1)
                     password2 = self.password2
                     if password2 is None:
                         password2 = getpass.getpass('Password#2:')
@@ -291,6 +311,7 @@ class juniper_vpn_wrapper(object):
                         password2 = get_script_output(password2[7:])
                     self.br.form['password#2'] = password2
                     self.r = self.br.submit()
+                    self.last_login = time.time()
                     return
             if self.fixed_password:
                 print 'Login failed (Invalid username or password?)'
@@ -356,9 +377,9 @@ class juniper_vpn_wrapper(object):
     def action_continue(self):
         # Yes, I want to terminate the existing connection
         # properly parse broken html
-        soup = BeautifulSoup(self.r.get_data())
-        self.r.set_data(soup.prettify())
-        self.br.set_response(self.r)
+        # soup = BeautifulSoup(self.r.get_data())
+        # self.r.set_data(soup.prettify())
+        # self.br.set_response(self.r)
         self.br.select_form(nr=0)
         # select checkboxes
         for control in self.br.form.controls:
