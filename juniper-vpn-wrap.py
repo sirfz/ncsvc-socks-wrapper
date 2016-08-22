@@ -132,7 +132,7 @@ class PrettifyHandler(mechanize.BaseHandler):
         # only use BeautifulSoup if response is html
         content_type = response.info().get('content-type')
         if content_type and 'html' in content_type:
-            soup = BeautifulSoup(response.get_data())
+            soup = BeautifulSoup(response.get_data(), "html.parser")
             response.set_data(soup.prettify().encode('UTF-8'))
         return response
 
@@ -211,7 +211,7 @@ class juniper_vpn_wrapper(object):
                 return 'continue'
             elif form.name == 'frmSelectRoles':
                 return 'select_roles'
-            elif form.name == 'frm':
+            elif form.name in ['frm', 'frmwelcome']:
                 url_ = urlparse(self.r.geturl())
                 qs = parse_qs(url_.query)
                 if 'rolecheck' in qs.get('step', []):
@@ -221,6 +221,8 @@ class juniper_vpn_wrapper(object):
                     sys.exit(1)
                 raise Exception('Unknown form type "{}" at {}'.format(form.name, url_.geturl()))
             else:
+                with open('.{}.html'.format(form.name), 'w') as f:
+                    f.write(self.r.read())
                 raise Exception('Unknown form type "{}" at {}'.format(form.name, self.r.geturl()))
         return 'tncc'
 
